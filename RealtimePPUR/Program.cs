@@ -34,7 +34,7 @@ namespace RealtimePPUR
 
         private static async Task CheckFiles()
         {
-            if (!Directory.Exists("Updater") || !File.Exists("config.cfg") || !Directory.Exists("src"))
+            if (!File.Exists("config.cfg") || !Directory.Exists("src"))
             {
                 MessageBox.Show("起動に必要なファイルをダウンロードします。", "ダウンロード", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 await new Updater().DownloadFiles();
