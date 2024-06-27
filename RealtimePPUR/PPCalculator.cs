@@ -25,18 +25,10 @@ using System.Linq;
 
 namespace RealtimePPUR
 {
-    public class PpCalculator
+    public class PpCalculator(string file, int mode)
     {
-        private Ruleset _ruleset;
-        private ProcessorWorkingBeatmap _workingBeatmap;
-        private int _mode;
-
-        public PpCalculator(string file, int mode)
-        {
-            _mode = mode;
-            _ruleset = SetRuleset(mode);
-            _workingBeatmap = ProcessorWorkingBeatmap.FromFile(file);
-        }
+        private Ruleset _ruleset = SetRuleset(mode);
+        private ProcessorWorkingBeatmap _workingBeatmap = ProcessorWorkingBeatmap.FromFile(file);
 
         public void SetMap(string file, int givenmode)
         {
