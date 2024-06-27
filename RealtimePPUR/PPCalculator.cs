@@ -12,6 +12,7 @@ using osu.Game.Rulesets.Mania;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu;
+using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.Taiko;
 using osu.Game.Rulesets.Taiko.Objects;
@@ -39,9 +40,9 @@ namespace RealtimePPUR
 
         public void SetMap(string file, int givenmode)
         {
-            _workingBeatmap = ProcessorWorkingBeatmap.FromFile(file);
-            _ruleset = SetRuleset(givenmode);
             _mode = givenmode;
+            _ruleset = SetRuleset(givenmode);
+            _workingBeatmap = ProcessorWorkingBeatmap.FromFile(file);
         }
 
         public void SetMode(int givenmode)
@@ -84,6 +85,7 @@ namespace RealtimePPUR
             };
             var difficultyCalculator = _ruleset.CreateDifficultyCalculator(_workingBeatmap);
             var difficultyAttributes = difficultyCalculator.Calculate(mods);
+            difficultyAttributes.MaxCombo = GetMaxCombo(beatmap, _mode);
             var performanceCalculator = _ruleset.CreatePerformanceCalculator();
             var performanceAttributes = performanceCalculator?.Calculate(scoreInfo, difficultyAttributes);
 
@@ -107,28 +109,21 @@ namespace RealtimePPUR
                     Statistics = statisticsCurrent,
                     Mods = mods
                 };
+                var performanceAttributesResult = performanceCalculator?.Calculate(resultScoreInfo, difficultyAttributes);
+                data.CurrentPerformanceAttributes = performanceAttributesResult;
 
-                if (_mode != 3)
+                if (_mode == 3) return data;
+                var staticsForCalcIfFc = CalcIfFc(beatmap, hits, _mode);
+                var iffcScoreInfo = new ScoreInfo(beatmap.BeatmapInfo, _ruleset.RulesetInfo)
                 {
-                    var staticsForCalcIfFc = CalcIfFc(beatmap, hits, _mode);
-
-                    var iffcScoreInfo = new ScoreInfo(beatmap.BeatmapInfo, _ruleset.RulesetInfo)
-                    {
-                        Accuracy = GetAccuracy(staticsForCalcIfFc, _mode),
-                        MaxCombo = GetMaxCombo(beatmap, _mode),
-                        Statistics = staticsForCalcIfFc,
-                        Mods = mods
-                    };
-
-                    var performanceAttributesIffc = performanceCalculator?.Calculate(iffcScoreInfo, difficultyAttributes);
-                    var performanceAttributesResult = performanceCalculator?.Calculate(resultScoreInfo, difficultyAttributes);
-
-                    data.CurrentPerformanceAttributes = performanceAttributesResult;
-                    data.PerformanceAttributesIffc = performanceAttributesIffc;
-                }
-
-                data.CurrentDifficultyAttributes = difficultyAttributes;
-                data.DifficultyAttributesIffc = difficultyAttributes;
+                    Accuracy = GetAccuracy(staticsForCalcIfFc, _mode),
+                    MaxCombo = GetMaxCombo(beatmap, _mode),
+                    Statistics = staticsForCalcIfFc,
+                    Mods = mods,
+                    TotalScore = args.Score
+                };
+                var performanceAttributesIffc = performanceCalculator?.Calculate(iffcScoreInfo, difficultyAttributes);
+                data.PerformanceAttributesIffc = performanceAttributesIffc;
 
                 return data;
             }
@@ -144,12 +139,11 @@ namespace RealtimePPUR
                         Accuracy = GetAccuracy(staticsForCalcIfFc, _mode),
                         MaxCombo = GetMaxCombo(beatmap, _mode),
                         Statistics = staticsForCalcIfFc,
-                        Mods = mods
+                        Mods = mods,
+                        TotalScore = args.Score
                     };
 
                     var performanceAttributesIffc = performanceCalculator?.Calculate(iffcScoreInfo, difficultyAttributes);
-
-                    data.DifficultyAttributesIffc = difficultyAttributes;
                     data.PerformanceAttributesIffc = performanceAttributesIffc;
                     data.IfFcHitResult = staticsForCalcIfFc;
                 }
@@ -167,7 +161,8 @@ namespace RealtimePPUR
                         Accuracy = GetAccuracy(staticsLoss, _mode),
                         MaxCombo = args.Combo,
                         Statistics = staticsLoss,
-                        Mods = mods
+                        Mods = mods,
+                        TotalScore = args.Score
                     };
 
                     var performanceAttributesCurrent = performanceCalculator?.Calculate(lossScoreInfo, difficultyAttributes);
@@ -185,7 +180,7 @@ namespace RealtimePPUR
 
                     var currentScoreInfo = new ScoreInfo(beatmap.BeatmapInfo, _ruleset.RulesetInfo)
                     {
-                        Accuracy = args.Accuracy / 100,
+                        Accuracy = GetAccuracy(statisticsCurrent, _mode),
                         MaxCombo = args.Combo,
                         Statistics = statisticsCurrent,
                         Mods = mods,
@@ -397,8 +392,9 @@ namespace RealtimePPUR
                     {
                         int totalObjects = GetMaxCombo(beatmap, mode);
                         int passedObjects = hits.Hit300 + hits.Hit100 + hits.HitMiss;
-                        int maxTinyDroplets = beatmap.HitObjects.OfType<JuiceStream>().Sum(s => s.NestedHitObjects.OfType<TinyDroplet>().Count());
-                        int maxDroplets = beatmap.HitObjects.OfType<JuiceStream>().Sum(s => s.NestedHitObjects.OfType<Droplet>().Count()) - maxTinyDroplets;
+                        var juiceStreams = beatmap.HitObjects.OfType<JuiceStream>().ToList();
+                        int maxTinyDroplets = juiceStreams.Sum(s => s.NestedHitObjects.OfType<TinyDroplet>().Count());
+                        int maxDroplets = juiceStreams.Sum(s => s.NestedHitObjects.OfType<Droplet>().Count()) - maxTinyDroplets;
                         int missing = totalObjects - passedObjects;
                         int missingFruits = Math.Max(0, missing - Math.Max(0, maxDroplets - hits.Hit100));
                         int missingDroplets = missing - missingFruits;
@@ -502,7 +498,7 @@ namespace RealtimePPUR
                         var countMiss = statistics[HitResult.Miss];
                         var total = countGreat + countGood + countMeh + countMiss;
 
-                        return (double)(6 * countGreat + (2 * countGood) + countMeh) / (6 * total);
+                        return (double)(6 * countGreat + 2 * countGood + countMeh) / (6 * total);
                     }
 
                 case 1:
@@ -544,7 +540,7 @@ namespace RealtimePPUR
         {
             return mode switch
             {
-                0 => beatmap.GetMaxCombo(),
+                0 => beatmap.HitObjects.Count + beatmap.HitObjects.OfType<Slider>().Sum(s => s.NestedHitObjects.Count - 1),
                 1 => beatmap.HitObjects.OfType<Hit>().Count(),
                 2 => beatmap.HitObjects.Count(h => h is Fruit) + beatmap.HitObjects.OfType<JuiceStream>().SelectMany(j => j.NestedHitObjects).Count(h => h is not TinyDroplet),
                 3 => 0,
@@ -675,14 +671,8 @@ namespace RealtimePPUR
                 Score = Score
             };
         }
-        public bool Equals(HitsResult other)
-        {
-            return HitGeki == other.HitGeki && Hit300 == other.Hit300 && HitKatu == other.HitKatu && Hit100 == other.Hit100 && Hit50 == other.Hit50 && HitMiss == other.HitMiss && Combo == other.Combo && Score == other.Score;
-        }
-        public bool IsEmpty()
-        {
-            return HitGeki == 0 && Hit300 == 0 && HitKatu == 0 && Hit100 == 0 && Hit50 == 0 && HitMiss == 0 && Combo == 0 && Score == 0;
-        }
+        public bool Equals(HitsResult other) => other != null && HitGeki == other.HitGeki && Hit300 == other.Hit300 && HitKatu == other.HitKatu && Hit100 == other.Hit100 && Hit50 == other.Hit50 && HitMiss == other.HitMiss && Combo == other.Combo && Score == other.Score;
+        public bool IsEmpty() => HitGeki == 0 && Hit300 == 0 && HitKatu == 0 && Hit100 == 0 && Hit50 == 0 && HitMiss == 0 && Combo == 0 && Score == 0;
     }
 
     public class CalculateArgs
