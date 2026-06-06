@@ -26,7 +26,7 @@ const SOFTWARE_LIBRARY = [
     "OxyPlot.WindowsForms.dll",
     "OxyPlot.dll",
     "MathNet.Numerics.dll",
-    "System.Diagnostics.DiagnosticSource.dll"
+    // "System.Diagnostics.DiagnosticSource.dll"
 ];
 
 const REALTIMEPPUR_FILES = [
